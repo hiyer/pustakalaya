@@ -79,10 +79,10 @@ class PustakalayaApp(App):
         if book is None:
             self.notify("No book selected", severity="warning")
             return
-        result = subprocess.run(["xdg-open", book["path"]], capture_output=True)
-        if result.returncode != 0:
-            msg = result.stderr.decode().strip() or "xdg-open failed"
-            self.notify(msg, severity="error")
+        try:
+            subprocess.Popen(["xdg-open", book["path"]], start_new_session=True)
+        except Exception as e:
+            self.notify(str(e), severity="error")
 
     def action_edit_metadata(self) -> None:
         books_pane = self.query_one(BooksPane)

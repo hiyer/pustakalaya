@@ -54,6 +54,7 @@ class BooksPane(Widget):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._books: list[dict] = []
+        self._search_timer = None
 
     def compose(self) -> ComposeResult:
         yield Input(placeholder="/ to search...", id="search-input")
@@ -97,4 +98,15 @@ class BooksPane(Widget):
 
     @on(Input.Changed, "#search-input")
     def _on_search_changed(self, event: Input.Changed) -> None:
-        self._load_books(event.value)
+        if self._search_timer is not None:
+            self._search_timer.stop()
+        self._search_timer = self.set_timer(0.3, lambda: self._load_books(event.value))
+
+    @on(Input.Submitted, "#search-input")
+    def _on_search_submitted(self, event: Input.Submitted) -> None:
+        self.query_one(DataTable).focus()
+
+    def on_key(self, event) -> None:
+        if event.key == "escape" and self.query_one("#search-input", Input).has_focus:
+            self.query_one("#search-input", Input).value = ""
+            self.query_one(DataTable).focus()
