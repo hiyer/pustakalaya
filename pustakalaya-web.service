@@ -1,0 +1,27 @@
+# pustakalaya-web.service
+# Copy to ~/.config/systemd/user/ then:
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now pustakalaya-web
+
+[Unit]
+Description=Pustakalaya web server
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=pustakalaya-web --host 127.0.0.1 --port 7788
+Restart=on-failure
+# HOME must be set so pustakalaya-web can locate ~/.local/share/pustakalaya/.
+# systemd user services launched via a login session inherit HOME from PAM.
+# If started another way, set: Environment=HOME=/home/youruser
+#
+# PATH: If pustakalaya-web is not found, use the absolute path instead:
+#   ExecStart=/home/youruser/.local/bin/pustakalaya-web --host 127.0.0.1 --port 7788
+# Find the path with: which pustakalaya-web
+#
+# PAM auth requires the running user to be in the shadow group:
+#   sudo usermod -aG shadow $USER  (then log out and back in)
+# Without shadow group membership, all authentication attempts will fail.
+
+[Install]
+WantedBy=default.target

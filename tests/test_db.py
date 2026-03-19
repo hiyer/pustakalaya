@@ -1,0 +1,186 @@
+import sqlite3
+from pathlib import Path
+import pytest
+from pustakalaya import db
+
+
+def test_init_creates_tables(tmp_path):
+    conn = db.init(tmp_path / "library.db")
+    tables = {
+        r[0]
+        for r in conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table'"
+        ).fetchall()
+    }
+    assert {"books", "library_roots"} <= tables
+
+
+def test_init_sets_wal_mode(tmp_path):
+    conn = db.init(tmp_path / "library.db")
+    row = conn.execute("PRAGMA journal_mode").fetchone()
+    assert row[0] == "wal"
+
+
+def test_upsert_book_insert(tmp_path):
+    conn = db.init(tmp_path / "library.db")
+    book_id = db.upsert_book(
+        conn,
+        Path("/books/dune.epub"),
+        {
+            "title": "Dune",
+            "author": "Frank Herbert",
+            "publisher": "Chilton",
+            "year": 1965,
+            "format": "epub",
+            "cover_path": None,
+        },
+    )
+    assert isinstance(book_id, int)
+    book = db.get_book(conn, book_id)
+    assert book["title"] == "Dune"
+    assert book["author"] == "Frank Herbert"
+    assert book["year"] == 1965
+
+
+def test_upsert_book_overwrites(tmp_path):
+    conn = db.init(tmp_path / "library.db")
+    path = Path("/books/dune.epub")
+    db.upsert_book(
+        conn,
+        path,
+        {
+            "title": "Dun",
+            "author": None,
+            "publisher": None,
+            "year": None,
+            "format": "epub",
+            "cover_path": None,
+        },
+    )
+    db.upsert_book(
+        conn,
+        path,
+        {
+            "title": "Dune",
+            "author": "Frank Herbert",
+            "publisher": None,
+            "year": 1965,
+            "format": "epub",
+            "cover_path": None,
+        },
+    )
+    books = db.get_all_books(conn)
+    assert len(books) == 1
+    assert books[0]["title"] == "Dune"
+
+
+def test_delete_book(tmp_path):
+    conn = db.init(tmp_path / "library.db")
+    db.upsert_book(
+        conn,
+        Path("/books/dune.epub"),
+        {
+            "title": "Dune",
+            "author": None,
+            "publisher": None,
+            "year": None,
+            "format": "epub",
+            "cover_path": None,
+        },
+    )
+    deleted = db.delete_book(conn, Path("/books/dune.epub"))
+    assert deleted is True
+    assert db.get_all_books(conn) == []
+    not_found = db.delete_book(conn, Path("/books/dune.epub"))
+    assert not_found is False
+
+
+def test_get_all_books_null_fields(tmp_path):
+    conn = db.init(tmp_path / "library.db")
+    db.upsert_book(
+        conn,
+        Path("/mystery.epub"),
+        {
+            "title": None,
+            "author": None,
+            "publisher": None,
+            "year": None,
+            "format": "epub",
+            "cover_path": None,
+        },
+    )
+    books = db.get_all_books(conn)
+    assert len(books) == 1
+
+
+def test_get_all_books_search(tmp_path):
+    conn = db.init(tmp_path / "library.db")
+    for path, title, author in [
+        ("/a.epub", "Dune", "Frank Herbert"),
+        ("/b.pdf", "Neuromancer", "William Gibson"),
+    ]:
+        db.upsert_book(
+            conn,
+            Path(path),
+            {
+                "title": title,
+                "author": author,
+                "publisher": None,
+                "year": None,
+                "format": "epub",
+                "cover_path": None,
+            },
+        )
+    assert len(db.get_all_books(conn, query="dune")) == 1
+    assert len(db.get_all_books(conn, query="GIBSON")) == 1
+    assert len(db.get_all_books(conn, query="")) == 2
+
+
+def test_update_cover(tmp_path):
+    conn = db.init(tmp_path / "library.db")
+    book_id = db.upsert_book(
+        conn,
+        Path("/books/dune.epub"),
+        {
+            "title": "Dune",
+            "author": None,
+            "publisher": None,
+            "year": None,
+            "format": "epub",
+            "cover_path": None,
+        },
+    )
+    db.update_cover(conn, book_id, "/covers/1.jpg")
+    assert db.get_book(conn, book_id)["cover_path"] == "/covers/1.jpg"
+
+
+def test_library_roots(tmp_path):
+    conn = db.init(tmp_path / "library.db")
+    db.add_library_root(conn, Path("/books"))
+    db.add_library_root(conn, Path("/comics"))
+    roots = db.get_library_roots(conn)
+    assert len(roots) == 2
+    assert any(r["path"] == "/books" for r in roots)
+    db.remove_library_root(conn, Path("/books"))
+    assert len(db.get_library_roots(conn)) == 1
+
+
+def test_get_all_books_pagination(tmp_path):
+    conn = db.init(tmp_path / "library.db")
+    for i in range(5):
+        db.upsert_book(
+            conn,
+            Path(f"/{i}.epub"),
+            {
+                "title": f"Book {i}",
+                "author": None,
+                "publisher": None,
+                "year": None,
+                "format": "epub",
+                "cover_path": None,
+            },
+        )
+    page1 = db.get_all_books(conn, limit=3, offset=0)
+    page2 = db.get_all_books(conn, limit=3, offset=3)
+    assert len(page1) == 3
+    assert len(page2) == 2

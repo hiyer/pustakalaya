@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}{{ book.title or "Book" }} — pustakalaya{% endblock %}
+{% block content %}
+<article>
+  {% if book.cover_path %}
+  <img src="/covers/{{ book.id }}" alt="Cover" width="200">
+  {% else %}
+  <div class="no-cover">No cover</div>
+  {% endif %}
+  <h1>{{ book.title or "(untitled)" }}</h1>
+  <dl>
+    <dt>Author</dt><dd>{{ book.author or "—" }}</dd>
+    <dt>Publisher</dt><dd>{{ book.publisher or "—" }}</dd>
+    <dt>Year</dt><dd>{{ book.year or "—" }}</dd>
+    <dt>Format</dt><dd>{{ book.format }}</dd>
+  </dl>
+  <a href="/books/{{ book.id }}/download">Download</a>
+  <a href="/">← Back</a>
+</article>
+{% endblock %}
