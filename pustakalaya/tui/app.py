@@ -21,8 +21,8 @@ class PustakalayaApp(App):
         Binding("e", "edit_metadata", "Edit", show=True),
         Binding("s", "scan_all", "Scan", show=True),
         Binding("/", "focus_search", "Search", show=True),
-        Binding("1", "tab_roots", "Roots", show=True),
-        Binding("2", "tab_books", "Books", show=True),
+        Binding("1", "tab_roots", "Books", show=True),
+        Binding("2", "tab_books", "Roots", show=True),
     ]
 
     def __init__(
@@ -59,10 +59,10 @@ class PustakalayaApp(App):
     def compose(self) -> ComposeResult:
         yield Header()
         with TabbedContent():
-            with TabPane("Library Roots", id="tab-roots"):
-                yield RootsPane()
             with TabPane("All Books", id="tab-books"):
                 yield BooksPane()
+            with TabPane("Library Roots", id="tab-roots"):
+                yield RootsPane()
         yield Footer()
 
     def action_tab_roots(self) -> None:

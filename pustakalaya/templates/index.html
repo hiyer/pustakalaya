@@ -7,11 +7,16 @@
 </form>
 <table>
   <thead>
-    <tr><th>Title</th><th>Author</th><th>Year</th><th>Format</th></tr>
+    <tr><th></th><th>Title</th><th>Author</th><th>Year</th><th>Format</th></tr>
   </thead>
   <tbody>
   {% for book in books %}
     <tr>
+      <td>
+        {% if book.cover_path %}
+        <a href="/books/{{ book.id }}"><img src="/covers/{{ book.id }}" alt="" width="40" style="display:block"></a>
+        {% endif %}
+      </td>
       <td><a href="/books/{{ book.id }}">{{ book.title or "(untitled)" }}</a></td>
       <td>{{ book.author or "—" }}</td>
       <td>{{ book.year or "—" }}</td>
