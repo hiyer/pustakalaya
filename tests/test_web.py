@@ -60,6 +60,34 @@ def client(sample_db, monkeypatch):
     return TestClient(app, raise_server_exceptions=True)
 
 
+# --- fixture with folder-organized books ---
+@pytest.fixture()
+def folder_db(tmp_path):
+    conn = db.init(tmp_path / "library.db")
+    db.add_library_root(conn, tmp_path / "books")
+    db.upsert_book(conn, tmp_path / "books" / "junji-ito" / "uzumaki.cbz", {
+        "title": "Uzumaki", "author": "Junji Ito", "publisher": None,
+        "year": None, "format": "cbz", "cover_path": None,
+    })
+    db.upsert_book(conn, tmp_path / "books" / "standalone.epub", {
+        "title": "Standalone", "author": None, "publisher": None,
+        "year": None, "format": "epub", "cover_path": None,
+    })
+    return tmp_path, conn
+
+
+@pytest.fixture()
+def folder_client(folder_db, monkeypatch):
+    db_dir, conn = folder_db
+    covers_dir = db_dir / "covers"
+    covers_dir.mkdir()
+    import pam
+    monkeypatch.setattr(pam, "authenticate", lambda u, p, service="login": u == "user" and p == "pass")
+    from pustakalaya.web.app import create_app
+    app = create_app(db_path=db_dir / "library.db", covers_dir=covers_dir)
+    return TestClient(app, raise_server_exceptions=True)
+
+
 GOOD_AUTH = ("user", "pass")
 BAD_AUTH = ("user", "wrong")
 
@@ -72,17 +100,41 @@ def test_bad_auth_returns_401(client):
     assert client.get("/", auth=BAD_AUTH).status_code == 401
 
 
-def test_root_lists_books(client):
+def test_root_shows_collections_not_books(client):
+    """/ now shows collections view; individual book titles are not listed inline."""
     resp = client.get("/", auth=GOOD_AUTH)
+    assert resp.status_code == 200
+    # All books in this fixture have no library root, so they fall into Uncategorized
+    assert "Uncategorized" in resp.text
+    # Individual titles should not appear at the top level
+    assert "Dune" not in resp.text
+
+
+def test_books_route_lists_books(client):
+    resp = client.get("/books", auth=GOOD_AUTH)
     assert resp.status_code == 200
     assert "Dune" in resp.text
     assert "Neuromancer" in resp.text
 
 
-def test_search_filters(client):
-    resp = client.get("/?q=dune", auth=GOOD_AUTH)
+def test_books_search_filters(client):
+    resp = client.get("/books?q=dune", auth=GOOD_AUTH)
     assert "Dune" in resp.text
     assert "Neuromancer" not in resp.text
+
+
+def test_books_pagination_page2(client, sample_db):
+    resp = client.get("/books?page=1&size=1", auth=GOOD_AUTH)
+    assert resp.status_code == 200
+    resp2 = client.get("/books?page=2&size=1", auth=GOOD_AUTH)
+    assert resp2.status_code == 200
+    assert "Dune" in resp.text or "Dune" in resp2.text
+    assert "Neuromancer" in resp.text or "Neuromancer" in resp2.text
+
+
+def test_books_size_cap_at_200(client):
+    resp = client.get("/books?size=9999", auth=GOOD_AUTH)
+    assert resp.status_code == 200
 
 
 def test_book_detail_page(client, sample_db):
@@ -156,19 +208,53 @@ def test_cover_missing_returns_404(client, sample_db):
     assert resp.status_code == 404
 
 
-def test_pagination_page2(client, sample_db):
-    db_dir, conn = sample_db
-    # With size=1, page 2 should show Neuromancer (books sorted by title)
-    resp = client.get("/?page=1&size=1", auth=GOOD_AUTH)
+def test_root_shows_collections(folder_client):
+    resp = folder_client.get("/", auth=GOOD_AUTH)
     assert resp.status_code == 200
-    resp2 = client.get("/?page=2&size=1", auth=GOOD_AUTH)
-    assert resp2.status_code == 200
-    # Collectively both pages should cover both books
-    assert "Dune" in resp.text or "Dune" in resp2.text
-    assert "Neuromancer" in resp.text or "Neuromancer" in resp2.text
+    assert "junji-ito" in resp.text
+    assert "Uncategorized" in resp.text
 
 
-def test_size_cap_at_200(client, sample_db):
-    """size > 200 should be silently capped to 200 (not raise an error)."""
-    resp = client.get("/?size=9999", auth=GOOD_AUTH)
+def test_books_route_lists_all_books(folder_client):
+    resp = folder_client.get("/books", auth=GOOD_AUTH)
     assert resp.status_code == 200
+    assert "Uzumaki" in resp.text
+    assert "Standalone" in resp.text
+
+
+def test_collection_route_filters_books(folder_client):
+    resp = folder_client.get("/collections/junji-ito", auth=GOOD_AUTH)
+    assert resp.status_code == 200
+    assert "Uzumaki" in resp.text
+    assert "Standalone" not in resp.text
+
+
+def test_collection_route_uncategorized(folder_client):
+    resp = folder_client.get("/collections/Uncategorized", auth=GOOD_AUTH)
+    assert resp.status_code == 200
+    assert "Standalone" in resp.text
+    assert "Uzumaki" not in resp.text
+
+
+def test_roots_route(folder_client, folder_db):
+    db_dir, _ = folder_db
+    resp = folder_client.get("/roots", auth=GOOD_AUTH)
+    assert resp.status_code == 200
+    assert str(db_dir / "books") in resp.text
+
+
+def test_collection_route_unknown_folder_returns_404(folder_client):
+    resp = folder_client.get("/collections/nonexistent-collection", auth=GOOD_AUTH)
+    assert resp.status_code == 404
+
+
+def test_collection_search(folder_client, folder_db):
+    db_dir, conn = folder_db
+    db.upsert_book(conn, db_dir / "books" / "junji-ito" / "gyo.cbz", {
+        "title": "Gyo", "author": "Junji Ito", "publisher": None,
+        "year": None, "format": "cbz", "cover_path": None,
+    })
+    resp = folder_client.get("/collections/junji-ito?q=gyo", auth=GOOD_AUTH)
+    assert resp.status_code == 200
+    assert "Gyo" in resp.text
+    assert "Uzumaki" not in resp.text

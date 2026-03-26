@@ -1,10 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Library — pustakalaya{% endblock %}
+{% block title %}
+  {% if folder %}{{ folder }} — pustakalaya{% else %}All Books — pustakalaya{% endif %}
+{% endblock %}
 {% block content %}
-<form method="get" action="/">
+{% set base_url = ("/collections/" ~ (folder | quote_path)) if folder else "/books" %}
+<form method="get" action="{{ base_url }}">
   <input type="search" name="q" value="{{ q }}" placeholder="Search title or author…">
   <button type="submit">Search</button>
 </form>
+{% if folder %}<p>← <a href="/">Collections</a> / <strong>{{ folder }}</strong></p>{% endif %}
 <table>
   <thead>
     <tr><th></th><th>Title</th><th>Author</th><th>Year</th><th>Format</th></tr>
@@ -23,14 +27,14 @@
       <td>{{ book.format }}</td>
     </tr>
   {% else %}
-    <tr><td colspan="4">No books found.</td></tr>
+    <tr><td colspan="5">No books found.</td></tr>
   {% endfor %}
   </tbody>
 </table>
 <nav>
   {% if page > 1 %}
-  <a href="/?q={{ q }}&page={{ page - 1 }}">← prev</a>
+  <a href="{{ base_url }}?q={{ q }}&page={{ page - 1 }}">← prev</a>
   {% endif %}
-  <a href="/?q={{ q }}&page={{ page + 1 }}">next →</a>
+  <a href="{{ base_url }}?q={{ q }}&page={{ page + 1 }}">next →</a>
 </nav>
 {% endblock %}

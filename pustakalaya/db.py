@@ -106,7 +106,7 @@ def get_all_books(
     else:
         where = ""
         params = {}
-    sql = f"SELECT * FROM books {where} ORDER BY title COLLATE NOCASE"
+    sql = f"SELECT * FROM books {where} ORDER BY title COLLATE NOCASE, id"
     if limit > 0:
         sql += " LIMIT :limit OFFSET :offset"
         params["limit"] = limit
@@ -128,3 +128,61 @@ def remove_library_root(conn: sqlite3.Connection, path: Path) -> None:
 def get_library_roots(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute("SELECT * FROM library_roots ORDER BY path").fetchall()
     return [dict(r) for r in rows]
+
+
+def _resolve_folder(book_path: Path, roots: list[dict]) -> str:
+    """Return the immediate child folder of the matching root that contains book_path.
+    Books directly in a root map to 'Uncategorized'. Books not under any root also
+    map to 'Uncategorized'. Deeply nested books (e.g. root/folder/sub/book.epub)
+    are attributed to the top-level folder (e.g. 'folder')."""
+    for root_row in roots:
+        root = Path(root_row["path"])
+        try:
+            rel = book_path.relative_to(root)
+            return rel.parts[0] if len(rel.parts) > 1 else "Uncategorized"
+        except ValueError:
+            continue
+    return "Uncategorized"
+
+
+def get_collections(conn: sqlite3.Connection) -> list[dict]:
+    """Return folder-based collections derived from book paths and library roots.
+    Each entry: {name, book_count, cover_book_id}. Sorted alphabetically."""
+    roots = get_library_roots(conn)
+    books = get_all_books(conn)  # ordered by title COLLATE NOCASE, id
+
+    collections: dict[str, dict] = {}
+    for book in books:
+        folder = _resolve_folder(Path(book["path"]), roots)
+        if folder not in collections:
+            collections[folder] = {"name": folder, "book_count": 0, "cover_book_id": None}
+        collections[folder]["book_count"] += 1
+        if collections[folder]["cover_book_id"] is None and book.get("cover_path"):
+            collections[folder]["cover_book_id"] = book["id"]
+
+    return sorted(collections.values(), key=lambda c: c["name"].lower())
+
+
+def get_books_in_folder(
+    conn: sqlite3.Connection,
+    folder_name: str,
+    query: str = "",
+    limit: int = 0,
+    offset: int = 0,
+) -> list[dict]:
+    """Return books whose resolved top-level folder equals folder_name.
+
+    Folder resolution requires Python-side path matching against library roots,
+    so filtering and pagination are applied in Python after fetching all
+    query-matching books from the database. limit/offset are relative to
+    the folder's book list, not the overall library.
+    """
+    roots = get_library_roots(conn)
+    all_books = get_all_books(conn, query=query)
+    result = [
+        b for b in all_books
+        if _resolve_folder(Path(b["path"]), roots) == folder_name
+    ]
+    if limit > 0:
+        result = result[offset : offset + limit]
+    return result

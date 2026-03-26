@@ -24,9 +24,10 @@ class MetadataModal(ModalScreen):
     }
     """
 
-    def __init__(self, book: dict):
+    def __init__(self, book: dict, books_pane=None):
         super().__init__()
         self.book = book
+        self._books_pane = books_pane
 
     def compose(self) -> ComposeResult:
         with Vertical(id="modal-box"):
@@ -77,10 +78,12 @@ class MetadataModal(ModalScreen):
                     "cover_path": self.book.get("cover_path"),
                 },
             )
-            # Refresh book list
-            from pustakalaya.tui.screens.main import BooksPane
-
-            self.app.query_one(BooksPane).refresh_books()
+            # Refresh the originating pane, or fall back to the tab-books pane
+            if self._books_pane is not None:
+                self._books_pane.refresh_books()
+            else:
+                from pustakalaya.tui.screens.main import BooksPane
+                self.app.query_one("#tab-books BooksPane", BooksPane).refresh_books()
             self.dismiss(True)
         except Exception as e:
             self.app.notify(str(e), severity="error")

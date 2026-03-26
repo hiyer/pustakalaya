@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Collections — pustakalaya{% endblock %}
+{% block content %}
+<h1>Collections</h1>
+<div class="collection-grid">
+  {% for col in collections %}
+  <a class="collection-tile" href="/collections/{{ col.name | quote_path }}">
+    <div class="collection-cover">
+      {% if col.cover_book_id %}
+      <img src="/covers/{{ col.cover_book_id }}" alt="">
+      {% else %}
+      <div class="collection-cover-placeholder"></div>
+      {% endif %}
+    </div>
+    <div class="collection-name">{{ col.name }}</div>
+    <div class="collection-count">{{ col.book_count }} book{{ "s" if col.book_count != 1 }}</div>
+  </a>
+  {% else %}
+  <p>No collections yet. Add a library root and scan.</p>
+  {% endfor %}
+</div>
+{% endblock %}

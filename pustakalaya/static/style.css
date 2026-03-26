@@ -13,3 +13,52 @@ button { padding: 0.3rem 0.8rem; }
 dl { display: grid; grid-template-columns: 8rem 1fr; gap: 0.3rem 1rem; }
 dt { font-weight: bold; }
 nav { margin-top: 1rem; }
+
+/* Collection grid */
+.collection-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding: 1rem 0;
+}
+
+.collection-tile {
+  display: flex;
+  flex-direction: column;
+  width: 140px;
+  text-decoration: none;
+  color: inherit;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.collection-tile:hover {
+  border-color: #666;
+}
+
+.collection-cover img,
+.collection-cover-placeholder {
+  width: 140px;
+  height: 180px;
+  display: block;
+  object-fit: cover;
+}
+
+.collection-cover-placeholder {
+  background: #888;
+}
+
+.collection-name {
+  padding: 0.4rem 0.5rem 0.1rem;
+  font-weight: bold;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.collection-count {
+  padding: 0 0.5rem 0.4rem;
+  font-size: 0.85em;
+  color: #666;
+}

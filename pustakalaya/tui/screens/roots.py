@@ -48,6 +48,8 @@ class RootsPane(Widget):
             self.app._watcher.add_root(path)
         inp.value = ""
         self._refresh_list()
+        from pustakalaya.tui.screens.collections import CollectionsPane
+        self.app.query_one(CollectionsPane).refresh_collections()
 
     @on(Button.Pressed, "#btn-remove")
     def _remove_root(self) -> None:
@@ -60,3 +62,5 @@ class RootsPane(Widget):
         if self.app._watcher is not None:
             self.app._watcher.remove_root(path)
         self._refresh_list()
+        from pustakalaya.tui.screens.collections import CollectionsPane
+        self.app.query_one(CollectionsPane).refresh_collections()

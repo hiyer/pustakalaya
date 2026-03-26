@@ -1,0 +1,14 @@
+# pustakalaya-web.path
+# Copy to ~/.config/systemd/user/ alongside pustakalaya-web.service, then:
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now pustakalaya-web.path
+
+[Unit]
+Description=Watch pustakalaya-web binary for changes
+
+[Path]
+PathModified=/home/hiyer/src/pustakalaya/.venv/bin/pustakalaya-web
+Unit=pustakalaya-web.service
+
+[Install]
+WantedBy=default.target

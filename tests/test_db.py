@@ -184,3 +184,161 @@ def test_get_all_books_pagination(tmp_path):
     page2 = db.get_all_books(conn, limit=3, offset=3)
     assert len(page1) == 3
     assert len(page2) == 2
+
+
+def test_get_collections_basic(tmp_path):
+    conn = db.init(tmp_path / "library.db")
+    db.add_library_root(conn, tmp_path / "books")
+    # Book in subfolder
+    db.upsert_book(conn, tmp_path / "books" / "junji-ito" / "uzumaki.cbz", {
+        "title": "Uzumaki", "author": "Junji Ito", "publisher": None,
+        "year": None, "format": "cbz", "cover_path": None,
+    })
+    # Book directly in root → Uncategorized
+    db.upsert_book(conn, tmp_path / "books" / "standalone.epub", {
+        "title": "Standalone", "author": None, "publisher": None,
+        "year": None, "format": "epub", "cover_path": None,
+    })
+    colls = db.get_collections(conn)
+    names = [c["name"] for c in colls]
+    assert "junji-ito" in names
+    assert "Uncategorized" in names
+    jito = next(c for c in colls if c["name"] == "junji-ito")
+    assert jito["book_count"] == 1
+    uncategorized = next(c for c in colls if c["name"] == "Uncategorized")
+    assert uncategorized["book_count"] == 1
+
+
+def test_get_collections_cover_book_id(tmp_path):
+    conn = db.init(tmp_path / "library.db")
+    db.add_library_root(conn, tmp_path / "books")
+    book_id = db.upsert_book(conn, tmp_path / "books" / "junji-ito" / "uzumaki.cbz", {
+        "title": "Uzumaki", "author": None, "publisher": None,
+        "year": None, "format": "cbz", "cover_path": None,
+    })
+    # No covers yet
+    colls = db.get_collections(conn)
+    jito = next(c for c in colls if c["name"] == "junji-ito")
+    assert jito["cover_book_id"] is None
+
+    # Add a cover
+    db.update_cover(conn, book_id, str(tmp_path / "covers" / "1.jpg"))
+    colls2 = db.get_collections(conn)
+    jito2 = next(c for c in colls2 if c["name"] == "junji-ito")
+    assert jito2["cover_book_id"] == book_id
+
+
+def test_get_collections_orphaned_book_goes_to_uncategorized(tmp_path):
+    conn = db.init(tmp_path / "library.db")
+    # No library root registered; book path won't match anything
+    db.upsert_book(conn, tmp_path / "orphan.epub", {
+        "title": "Orphan", "author": None, "publisher": None,
+        "year": None, "format": "epub", "cover_path": None,
+    })
+    colls = db.get_collections(conn)
+    assert len(colls) == 1
+    assert colls[0]["name"] == "Uncategorized"
+
+
+def test_get_collections_sorted_alphabetically(tmp_path):
+    conn = db.init(tmp_path / "library.db")
+    db.add_library_root(conn, tmp_path / "books")
+    for folder in ["zebra", "apple", "mango"]:
+        db.upsert_book(conn, tmp_path / "books" / folder / "book.epub", {
+            "title": folder, "author": None, "publisher": None,
+            "year": None, "format": "epub", "cover_path": None,
+        })
+    colls = db.get_collections(conn)
+    names = [c["name"] for c in colls]
+    assert names == sorted(names, key=str.lower)
+
+
+def test_get_books_in_folder_basic(tmp_path):
+    conn = db.init(tmp_path / "library.db")
+    db.add_library_root(conn, tmp_path / "books")
+    db.upsert_book(conn, tmp_path / "books" / "junji-ito" / "uzumaki.cbz", {
+        "title": "Uzumaki", "author": None, "publisher": None,
+        "year": None, "format": "cbz", "cover_path": None,
+    })
+    db.upsert_book(conn, tmp_path / "books" / "junji-ito" / "gyo.cbz", {
+        "title": "Gyo", "author": None, "publisher": None,
+        "year": None, "format": "cbz", "cover_path": None,
+    })
+    db.upsert_book(conn, tmp_path / "books" / "other" / "dune.epub", {
+        "title": "Dune", "author": None, "publisher": None,
+        "year": None, "format": "epub", "cover_path": None,
+    })
+    results = db.get_books_in_folder(conn, "junji-ito")
+    assert len(results) == 2
+    titles = {b["title"] for b in results}
+    assert titles == {"Uzumaki", "Gyo"}
+
+
+def test_get_books_in_folder_uncategorized_includes_orphans(tmp_path):
+    conn = db.init(tmp_path / "library.db")
+    db.add_library_root(conn, tmp_path / "books")
+    # Directly in root
+    db.upsert_book(conn, tmp_path / "books" / "direct.epub", {
+        "title": "Direct", "author": None, "publisher": None,
+        "year": None, "format": "epub", "cover_path": None,
+    })
+    # Orphaned (no matching root)
+    db.upsert_book(conn, tmp_path / "orphan.epub", {
+        "title": "Orphan", "author": None, "publisher": None,
+        "year": None, "format": "epub", "cover_path": None,
+    })
+    results = db.get_books_in_folder(conn, "Uncategorized")
+    titles = {b["title"] for b in results}
+    assert "Direct" in titles
+    assert "Orphan" in titles
+
+
+def test_get_books_in_folder_search(tmp_path):
+    conn = db.init(tmp_path / "library.db")
+    db.add_library_root(conn, tmp_path / "books")
+    for title in ["Uzumaki", "Gyo", "Tomie"]:
+        db.upsert_book(conn, tmp_path / "books" / "junji-ito" / f"{title}.cbz", {
+            "title": title, "author": "Junji Ito", "publisher": None,
+            "year": None, "format": "cbz", "cover_path": None,
+        })
+    results = db.get_books_in_folder(conn, "junji-ito", query="uzumaki")
+    assert len(results) == 1
+    assert results[0]["title"] == "Uzumaki"
+
+
+def test_get_books_in_folder_pagination(tmp_path):
+    conn = db.init(tmp_path / "library.db")
+    db.add_library_root(conn, tmp_path / "books")
+    for i in range(5):
+        db.upsert_book(conn, tmp_path / "books" / "series" / f"vol{i}.cbz", {
+            "title": f"Vol {i}", "author": None, "publisher": None,
+            "year": None, "format": "cbz", "cover_path": None,
+        })
+    page1 = db.get_books_in_folder(conn, "series", limit=3, offset=0)
+    page2 = db.get_books_in_folder(conn, "series", limit=3, offset=3)
+    assert len(page1) == 3
+    assert len(page2) == 2
+
+
+def test_get_books_in_folder_deeply_nested(tmp_path):
+    """Books nested multiple levels deep are attributed to the top-level subfolder."""
+    conn = db.init(tmp_path / "library.db")
+    db.add_library_root(conn, tmp_path / "books")
+    db.upsert_book(conn, tmp_path / "books" / "junji-ito" / "horror" / "uzumaki.cbz", {
+        "title": "Uzumaki", "author": None, "publisher": None,
+        "year": None, "format": "cbz", "cover_path": None,
+    })
+    results = db.get_books_in_folder(conn, "junji-ito")
+    assert len(results) == 1
+    assert results[0]["title"] == "Uzumaki"
+
+
+def test_get_books_in_folder_nonexistent_folder_returns_empty(tmp_path):
+    conn = db.init(tmp_path / "library.db")
+    db.add_library_root(conn, tmp_path / "books")
+    db.upsert_book(conn, tmp_path / "books" / "junji-ito" / "uzumaki.cbz", {
+        "title": "Uzumaki", "author": None, "publisher": None,
+        "year": None, "format": "cbz", "cover_path": None,
+    })
+    results = db.get_books_in_folder(conn, "nonexistent-folder")
+    assert results == []

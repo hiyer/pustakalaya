@@ -51,13 +51,15 @@ class BooksPane(Widget):
     BooksPane { height: 1fr; }
     """
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, folder_filter: str | None = None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.folder_filter = folder_filter
         self._books: list[dict] = []
         self._search_timer = None
 
     def compose(self) -> ComposeResult:
-        yield Input(placeholder="/ to search...", id="search-input")
+        if self.folder_filter is None:
+            yield Input(placeholder="/ to search...", id="search-input")
         with Horizontal():
             yield DataTable(id="book-table", cursor_type="row")
             yield BookDetail(id="book-detail")
@@ -70,7 +72,10 @@ class BooksPane(Widget):
     def _load_books(self, query: str = "") -> None:
         table = self.query_one(DataTable)
         table.clear()
-        self._books: list[dict] = db.get_all_books(self.app.conn, query=query)
+        if self.folder_filter is not None:
+            self._books = db.get_books_in_folder(self.app.conn, self.folder_filter)
+        else:
+            self._books = db.get_all_books(self.app.conn, query=query)
         for book in self._books:
             table.add_row(
                 book.get("title") or "",
@@ -107,6 +112,8 @@ class BooksPane(Widget):
         self.query_one(DataTable).focus()
 
     def on_key(self, event) -> None:
+        if self.folder_filter is not None:
+            return
         if event.key == "escape" and self.query_one("#search-input", Input).has_focus:
             self.query_one("#search-input", Input).value = ""
             self.query_one(DataTable).focus()
