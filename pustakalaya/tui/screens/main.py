@@ -34,15 +34,26 @@ class BookDetail(Static):
         if book is None:
             cover.image = None
             self.query_one("#detail-title", Label).update("(no book selected)")
-            for fid in ("#detail-author", "#detail-year", "#detail-format", "#detail-path"):
+            for fid in (
+                "#detail-author",
+                "#detail-year",
+                "#detail-format",
+                "#detail-path",
+            ):
                 self.query_one(fid, Label).update("")
             return
         cover_path = book.get("cover_path")
         cover.image = cover_path if cover_path else None
         self.query_one("#detail-title", Label).update(book.get("title") or "")
-        self.query_one("#detail-author", Label).update(f"Author: {book.get('author') or '—'}")
-        self.query_one("#detail-year", Label).update(f"Year:   {book.get('year') or '—'}")
-        self.query_one("#detail-format", Label).update(f"Format: {book.get('format', '')}")
+        self.query_one("#detail-author", Label).update(
+            f"Author: {book.get('author') or '—'}"
+        )
+        self.query_one("#detail-year", Label).update(
+            f"Year:   {book.get('year') or '—'}"
+        )
+        self.query_one("#detail-format", Label).update(
+            f"Format: {book.get('format', '')}"
+        )
         self.query_one("#detail-path", Label).update(f"Path: {book.get('path', '')}")
 
 

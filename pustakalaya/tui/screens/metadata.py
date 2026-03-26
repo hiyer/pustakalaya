@@ -83,6 +83,7 @@ class MetadataModal(ModalScreen):
                 self._books_pane.refresh_books()
             else:
                 from pustakalaya.tui.screens.main import BooksPane
+
                 self.app.query_one("#tab-books BooksPane", BooksPane).refresh_books()
             self.dismiss(True)
         except Exception as e:

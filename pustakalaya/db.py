@@ -160,7 +160,11 @@ def get_collections(conn: sqlite3.Connection) -> list[dict]:
     for book in books:
         folder = _resolve_folder(Path(book["path"]), roots)
         if folder not in collections:
-            collections[folder] = {"name": folder, "book_count": 0, "cover_book_id": None}
+            collections[folder] = {
+                "name": folder,
+                "book_count": 0,
+                "cover_book_id": None,
+            }
             cover_candidates[folder] = []
         collections[folder]["book_count"] += 1
         if book.get("cover_path"):
@@ -190,8 +194,7 @@ def get_books_in_folder(
     roots = get_library_roots(conn)
     all_books = get_all_books(conn, query=query)
     result = [
-        b for b in all_books
-        if _resolve_folder(Path(b["path"]), roots) == folder_name
+        b for b in all_books if _resolve_folder(Path(b["path"]), roots) == folder_name
     ]
     if limit > 0:
         result = result[offset : offset + limit]

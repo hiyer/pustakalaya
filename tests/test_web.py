@@ -65,14 +65,30 @@ def client(sample_db, monkeypatch):
 def folder_db(tmp_path):
     conn = db.init(tmp_path / "library.db")
     db.add_library_root(conn, tmp_path / "books")
-    db.upsert_book(conn, tmp_path / "books" / "junji-ito" / "uzumaki.cbz", {
-        "title": "Uzumaki", "author": "Junji Ito", "publisher": None,
-        "year": None, "format": "cbz", "cover_path": None,
-    })
-    db.upsert_book(conn, tmp_path / "books" / "standalone.epub", {
-        "title": "Standalone", "author": None, "publisher": None,
-        "year": None, "format": "epub", "cover_path": None,
-    })
+    db.upsert_book(
+        conn,
+        tmp_path / "books" / "junji-ito" / "uzumaki.cbz",
+        {
+            "title": "Uzumaki",
+            "author": "Junji Ito",
+            "publisher": None,
+            "year": None,
+            "format": "cbz",
+            "cover_path": None,
+        },
+    )
+    db.upsert_book(
+        conn,
+        tmp_path / "books" / "standalone.epub",
+        {
+            "title": "Standalone",
+            "author": None,
+            "publisher": None,
+            "year": None,
+            "format": "epub",
+            "cover_path": None,
+        },
+    )
     return tmp_path, conn
 
 
@@ -82,8 +98,12 @@ def folder_client(folder_db, monkeypatch):
     covers_dir = db_dir / "covers"
     covers_dir.mkdir()
     import pam
-    monkeypatch.setattr(pam, "authenticate", lambda u, p, service="login": u == "user" and p == "pass")
+
+    monkeypatch.setattr(
+        pam, "authenticate", lambda u, p, service="login": u == "user" and p == "pass"
+    )
     from pustakalaya.web.app import create_app
+
     app = create_app(db_path=db_dir / "library.db", covers_dir=covers_dir)
     return TestClient(app, raise_server_exceptions=True)
 
@@ -250,10 +270,18 @@ def test_collection_route_unknown_folder_returns_404(folder_client):
 
 def test_collection_search(folder_client, folder_db):
     db_dir, conn = folder_db
-    db.upsert_book(conn, db_dir / "books" / "junji-ito" / "gyo.cbz", {
-        "title": "Gyo", "author": "Junji Ito", "publisher": None,
-        "year": None, "format": "cbz", "cover_path": None,
-    })
+    db.upsert_book(
+        conn,
+        db_dir / "books" / "junji-ito" / "gyo.cbz",
+        {
+            "title": "Gyo",
+            "author": "Junji Ito",
+            "publisher": None,
+            "year": None,
+            "format": "cbz",
+            "cover_path": None,
+        },
+    )
     resp = folder_client.get("/collections/junji-ito?q=gyo", auth=GOOD_AUTH)
     assert resp.status_code == 200
     assert "Gyo" in resp.text

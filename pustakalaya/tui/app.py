@@ -36,6 +36,7 @@ class PustakalayaApp(App):
         data_dir = Path.home() / ".local" / "share" / "pustakalaya"
         if conn is None:
             from pustakalaya import db
+
             conn = db.init(data_dir / "library.db")
         self.conn = conn
         self.covers_dir = covers_dir or (data_dir / "covers")

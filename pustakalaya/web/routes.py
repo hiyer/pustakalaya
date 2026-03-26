@@ -45,14 +45,18 @@ def all_books(request: Request, q: str = "", page: int = 1, size: int = 50):
 
 
 @router.get("/collections/{folder}", response_class=HTMLResponse)
-def collection_books(request: Request, folder: str, q: str = "", page: int = 1, size: int = 50):
+def collection_books(
+    request: Request, folder: str, q: str = "", page: int = 1, size: int = 50
+):
     # Verify the collection exists
     known = {c["name"] for c in db.get_collections(_conn(request))}
     if folder not in known:
         raise HTTPException(status_code=404, detail="Collection not found")
     size = min(size, 200)
     offset = (page - 1) * size
-    books = db.get_books_in_folder(_conn(request), folder, query=q, limit=size, offset=offset)
+    books = db.get_books_in_folder(
+        _conn(request), folder, query=q, limit=size, offset=offset
+    )
     return _templates.TemplateResponse(
         request,
         "index.html",
@@ -63,9 +67,7 @@ def collection_books(request: Request, folder: str, q: str = "", page: int = 1, 
 @router.get("/roots", response_class=HTMLResponse)
 def roots(request: Request):
     library_roots = db.get_library_roots(_conn(request))
-    return _templates.TemplateResponse(
-        request, "roots.html", {"roots": library_roots}
-    )
+    return _templates.TemplateResponse(request, "roots.html", {"roots": library_roots})
 
 
 @router.get("/books/{book_id}", response_class=HTMLResponse)
