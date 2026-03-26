@@ -1,6 +1,6 @@
 # Pustakalaya
 
-A self-hosted personal book library for Linux. Manage your collection via a terminal UI and browse/download via a local web interface.
+A lightweight self-hosted personal book library for Linux. Manage your collection via a terminal UI and browse/download via a local web interface.
 
 Supports EPUB, PDF, CBZ, and CBR formats.
 
