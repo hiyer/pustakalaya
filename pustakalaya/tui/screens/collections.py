@@ -121,8 +121,11 @@ class CollectionsPane(Widget):
 
 
 class CollectionBooksScreen(Screen):
+    DEFAULT_CSS = """
+    CollectionBooksScreen #book-detail { display: none; }
+    """
     BINDINGS = [
-        Binding("escape", "app.pop_screen", "Back", show=True),
+        Binding("escape", "back", "Back", show=True),
         Binding("o", "open_book", "Open", show=True),
         Binding("e", "edit_metadata", "Edit", show=True),
         Binding("1", "nav_collections", "Collections", show=False),
@@ -142,15 +145,35 @@ class CollectionBooksScreen(Screen):
     def on_mount(self) -> None:
         self.sub_title = self.folder_name
 
-    def action_nav_collections(self) -> None:
+    def _pop(self) -> None:
         self.app.pop_screen()
+        try:
+            cover_img = self.app.query_one(CollectionsPane).query_one(
+                ".cover-img", CoverImage
+            )
+            saved = cover_img.image
+            # Two-frame repaint: textual_image writes outside Textual's render model,
+            # so the differential renderer won't repaint cells it thinks are unchanged.
+            # Frame 1 (image=None): Textual writes empty cells + sends Kitty delete,
+            # clearing the ghost text left by the DataTable in the popped screen.
+            # Frame 2 (call_after_refresh): image is restored on the clean text layer.
+            cover_img.image = None
+            cover_img.call_after_refresh(lambda: setattr(cover_img, "image", saved))
+        except Exception:
+            pass
+
+    def action_back(self) -> None:
+        self._pop()
+
+    def action_nav_collections(self) -> None:
+        self._pop()
 
     def action_nav_books(self) -> None:
-        self.app.pop_screen()
+        self._pop()
         self.app.action_tab_books()
 
     def action_nav_roots(self) -> None:
-        self.app.pop_screen()
+        self._pop()
         self.app.action_tab_roots()
 
     def action_open_book(self) -> None:
