@@ -55,6 +55,7 @@ class BooksPane(Widget):
         super().__init__(*args, **kwargs)
         self.folder_filter = folder_filter
         self._books: list[dict] = []
+        self._books_by_id: dict[int, dict] = {}
         self._search_timer = None
 
     def compose(self) -> ComposeResult:
@@ -69,6 +70,9 @@ class BooksPane(Widget):
         table.add_columns("Title", "Author", "Format")
         self._load_books()
 
+    def on_show(self) -> None:
+        self.query_one(DataTable).focus()
+
     def _load_books(self, query: str = "") -> None:
         table = self.query_one(DataTable)
         table.clear()
@@ -76,6 +80,7 @@ class BooksPane(Widget):
             self._books = db.get_books_in_folder(self.app.conn, self.folder_filter)
         else:
             self._books = db.get_all_books(self.app.conn, query=query)
+        self._books_by_id = {b["id"]: b for b in self._books}
         for book in self._books:
             table.add_row(
                 book.get("title") or "",
@@ -83,22 +88,22 @@ class BooksPane(Widget):
                 book.get("format") or "",
                 key=str(book["id"]),
             )
+        if self._books:
+            table.move_cursor(row=0)
 
     def refresh_books(self, query: str = "") -> None:
         self._load_books(query)
 
     def selected_book(self) -> dict | None:
-        table = self.query_one(DataTable)
-        if table.cursor_row < 0 or not self._books:
+        rows = self.query_one(DataTable).ordered_rows
+        cursor = self.query_one(DataTable).cursor_row
+        if cursor < 0 or cursor >= len(rows):
             return None
-        try:
-            return self._books[table.cursor_row]
-        except IndexError:
-            return None
+        return self._books_by_id.get(int(rows[cursor].key.value))
 
     @on(DataTable.RowHighlighted)
     def _on_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
-        book = self.selected_book()
+        book = self._books_by_id.get(int(event.row_key.value))
         self.query_one(BookDetail).show(book)
 
     @on(Input.Changed, "#search-input")

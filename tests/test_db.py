@@ -45,7 +45,7 @@ def test_upsert_book_insert(tmp_path):
 def test_upsert_book_overwrites(tmp_path):
     conn = db.init(tmp_path / "library.db")
     path = Path("/books/dune.epub")
-    db.upsert_book(
+    id1 = db.upsert_book(
         conn,
         path,
         {
@@ -57,7 +57,7 @@ def test_upsert_book_overwrites(tmp_path):
             "cover_path": None,
         },
     )
-    db.upsert_book(
+    id2 = db.upsert_book(
         conn,
         path,
         {
@@ -69,6 +69,7 @@ def test_upsert_book_overwrites(tmp_path):
             "cover_path": None,
         },
     )
+    assert id1 == id2, "upsert must return same id for existing row"
     books = db.get_all_books(conn)
     assert len(books) == 1
     assert books[0]["title"] == "Dune"
@@ -186,6 +187,25 @@ def test_get_all_books_pagination(tmp_path):
     assert len(page2) == 2
 
 
+def test_upsert_book_stable_id_after_other_inserts(tmp_path):
+    """upsert returns the existing row's id even when other rows were inserted after it."""
+    conn = db.init(tmp_path / "library.db")
+    id_a = db.upsert_book(conn, Path("/a.epub"), {
+        "title": "A", "author": None, "publisher": None, "year": None,
+        "format": "epub", "cover_path": None,
+    })
+    db.upsert_book(conn, Path("/b.epub"), {
+        "title": "B", "author": None, "publisher": None, "year": None,
+        "format": "epub", "cover_path": None,
+    })
+    # Re-upsert /a — must return id_a, not /b's id
+    id_a2 = db.upsert_book(conn, Path("/a.epub"), {
+        "title": "A updated", "author": None, "publisher": None, "year": None,
+        "format": "epub", "cover_path": None,
+    })
+    assert id_a == id_a2
+
+
 def test_get_collections_basic(tmp_path):
     conn = db.init(tmp_path / "library.db")
     db.add_library_root(conn, tmp_path / "books")
@@ -226,6 +246,23 @@ def test_get_collections_cover_book_id(tmp_path):
     colls2 = db.get_collections(conn)
     jito2 = next(c for c in colls2 if c["name"] == "junji-ito")
     assert jito2["cover_book_id"] == book_id
+
+
+def test_get_collections_cover_book_id_random(tmp_path):
+    """cover_book_id is one of the books with a cover (random selection)."""
+    conn = db.init(tmp_path / "library.db")
+    db.add_library_root(conn, tmp_path / "books")
+    ids = []
+    for title in ["Uzumaki", "Gyo", "Tomie"]:
+        bid = db.upsert_book(conn, tmp_path / "books" / "junji-ito" / f"{title}.cbz", {
+            "title": title, "author": None, "publisher": None,
+            "year": None, "format": "cbz", "cover_path": None,
+        })
+        db.update_cover(conn, bid, str(tmp_path / "covers" / f"{bid}.jpg"))
+        ids.append(bid)
+    colls = db.get_collections(conn)
+    jito = next(c for c in colls if c["name"] == "junji-ito")
+    assert jito["cover_book_id"] in ids
 
 
 def test_get_collections_orphaned_book_goes_to_uncategorized(tmp_path):

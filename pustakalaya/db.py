@@ -43,7 +43,7 @@ def init(db_path: Path) -> sqlite3.Connection:
 
 def upsert_book(conn: sqlite3.Connection, path: Path, meta: dict) -> int:
     """Insert or replace a book record. Returns the book id."""
-    cursor = conn.execute(
+    conn.execute(
         """
         INSERT INTO books (path, title, author, publisher, year, format, cover_path)
         VALUES (:path, :title, :author, :publisher, :year, :format, :cover_path)
@@ -66,7 +66,8 @@ def upsert_book(conn: sqlite3.Connection, path: Path, meta: dict) -> int:
         },
     )
     conn.commit()
-    return cursor.lastrowid
+    row = conn.execute("SELECT id FROM books WHERE path = ?", (str(path),)).fetchone()
+    return row["id"]
 
 
 def update_cover(conn: sqlite3.Connection, book_id: int, cover_path: str) -> None:
@@ -147,18 +148,27 @@ def _resolve_folder(book_path: Path, roots: list[dict]) -> str:
 
 def get_collections(conn: sqlite3.Connection) -> list[dict]:
     """Return folder-based collections derived from book paths and library roots.
-    Each entry: {name, book_count, cover_book_id}. Sorted alphabetically."""
+    Each entry: {name, book_count, cover_book_id}. cover_book_id is chosen
+    randomly from books in the collection that have a cover. Sorted alphabetically."""
+    import random
+
     roots = get_library_roots(conn)
-    books = get_all_books(conn)  # ordered by title COLLATE NOCASE, id
+    books = get_all_books(conn)
 
     collections: dict[str, dict] = {}
+    cover_candidates: dict[str, list[int]] = {}
     for book in books:
         folder = _resolve_folder(Path(book["path"]), roots)
         if folder not in collections:
             collections[folder] = {"name": folder, "book_count": 0, "cover_book_id": None}
+            cover_candidates[folder] = []
         collections[folder]["book_count"] += 1
-        if collections[folder]["cover_book_id"] is None and book.get("cover_path"):
-            collections[folder]["cover_book_id"] = book["id"]
+        if book.get("cover_path"):
+            cover_candidates[folder].append(book["id"])
+
+    for folder, candidates in cover_candidates.items():
+        if candidates:
+            collections[folder]["cover_book_id"] = random.choice(candidates)
 
     return sorted(collections.values(), key=lambda c: c["name"].lower())
 
